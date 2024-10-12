@@ -1,4 +1,4 @@
-name: Add Rules to Cloudflare Gateway
+name: Update Allowlist Rules
 on:
   schedule:
   - cron: "0 3 */3 * *"
