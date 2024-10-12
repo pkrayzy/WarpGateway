@@ -1,5 +1,7 @@
 name: Add Rules to Cloudflare Gateway
 on:
+  schedule:
+  - cron: "0 3 */3 * *"
   push:
   workflow_dispatch:
 jobs:
