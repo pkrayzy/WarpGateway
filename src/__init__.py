@@ -4,7 +4,7 @@ from sys import exit
 from src.colorlog import logger
 
 # Constants
-PREFIX = "AdBlock-DNS-Filters"
+PREFIX = "Blocklist"
 
 # Read .env variables 
 def dot_env(file_path=".env"):
