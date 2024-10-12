@@ -34,7 +34,7 @@ def create_rule(rule_name, list_ids):
     data = {
         "name": rule_name,
         "description": "Block Ads & Tracking",
-        "action": "block",
+        "action": "allow",
         "traffic": " or ".join(f'any(dns.domains[*] in ${lst})' for lst in list_ids),
         "enabled": True,
     }
@@ -47,7 +47,7 @@ def update_rule(rule_name, rule_id, list_ids):
     data = {
         "name": rule_name,
         "description": "Block Ads & Tracking",
-        "action": "block",
+        "action": "allow",
         "traffic": " or ".join(f'any(dns.domains[*] in ${lst})' for lst in list_ids),
         "enabled": True,
     }
