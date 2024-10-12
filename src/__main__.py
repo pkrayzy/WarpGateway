@@ -10,7 +10,7 @@ from src import utils, info, error, silent_error, PREFIX
 class CloudflareManager:
     def __init__(self, prefix):
         self.list_name = f"[{prefix}]"
-        self.rule_name = f"[{prefix}]"
+        self.rule_name = f"{prefix}"
 
     def update_resources(self):
         domains_to_block = DomainConverter().process_urls()
