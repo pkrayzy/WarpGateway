@@ -1,18 +1,10 @@
-<<<<<<< HEAD
-name: Update Allowlist Rules
-=======
 name: Update Blocklist Rules
->>>>>>> facd83e4592591d91ba40df15c103c8b3f11e79b
 on:
   schedule:
   - cron: "0 3 */3 * *"
   push:
     branches:
-<<<<<<< HEAD
-    - allowlist
-=======
     - main
->>>>>>> facd83e4592591d91ba40df15c103c8b3f11e79b
   workflow_dispatch:
 jobs:
   run:
