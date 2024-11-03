@@ -23,6 +23,8 @@ class CloudflareManager:
         
         current_lists = utils.get_current_lists(self.cache, self.list_name)
         current_rules = utils.get_current_rules(self.cache, self.rule_name)
+        current_lists = utils.get_current_lists(self.cache, self.list_name)
+        current_rules = utils.get_current_rules(self.cache, self.rule_name)
 
         chunked_domains = list(utils.split_domain_list(domains_to_block, 1000))
         list_ids = []
@@ -45,10 +47,17 @@ class CloudflareManager:
                 list_ids.append(cgp_list["id"])
             
                 self.cache["mapping"][cgp_list["id"]] = chunk
+            
+                self.cache["mapping"][cgp_list["id"]] = chunk
             else:
                 lst = create_list(list_name, chunk)
                 info(f"Created list: {lst['name']}")
                 list_ids.append(lst["id"])
+
+                self.cache["lists"].append(lst)
+                self.cache["mapping"][lst["id"]] = chunk
+
+        utils.save_cache(self.cache)
 
                 self.cache["lists"].append(lst)
                 self.cache["mapping"][lst["id"]] = chunk
@@ -66,9 +75,11 @@ class CloudflareManager:
                 rule = update_rule(self.rule_name, cgp_rule["id"], list_ids)
                 info(f"Updated rule {cgp_rule['name']}")
                 self.cache["rules"] = [rule]
+                self.cache["rules"] = [rule]
         else:
             rule = create_rule(self.rule_name, list_ids)
             info(f"Created rule {rule['name']}")
+            self.cache["rules"].append(rule)
             self.cache["rules"].append(rule)
 
         # Delete excess lists
@@ -81,8 +92,15 @@ class CloudflareManager:
                 del self.cache["mapping"][lst["id"]]
 
         utils.save_cache(self.cache)
+            self.cache["lists"] = [item for item in self.cache["lists"] if item["id"] != lst["id"]]
+            if lst["id"] in self.cache["mapping"]:
+                del self.cache["mapping"][lst["id"]]
+
+        utils.save_cache(self.cache)
 
     def delete_resources(self):
+        current_lists = utils.get_current_lists(self.cache, self.list_name)
+        current_rules = utils.get_current_rules(self.cache, self.rule_name)
         current_lists = utils.get_current_lists(self.cache, self.list_name)
         current_rules = utils.get_current_rules(self.cache, self.rule_name)
         current_lists.sort(key=utils.safe_sort_key)
@@ -101,6 +119,11 @@ class CloudflareManager:
                 del self.cache["mapping"][lst["id"]]
             self.cache["rules"] = []
             utils.save_cache(self.cache)
+            self.cache["lists"] = [item for item in self.cache["lists"] if item["id"] != lst["id"]]
+            if lst["id"] in self.cache["mapping"]:
+                del self.cache["mapping"][lst["id"]]
+            self.cache["rules"] = []
+            utils.save_cache(self.cache)
 
 def main():
     parser = argparse.ArgumentParser(description="Cloudflare Manager Script")
@@ -110,6 +133,8 @@ def main():
     
     if args.action == "run":
         cloudflare_manager.update_resources()
+        if utils.is_running_in_github_actions():
+            utils.delete_cache()
         if utils.is_running_in_github_actions():
             utils.delete_cache()
     elif args.action == "leave":
