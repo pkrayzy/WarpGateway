@@ -1,87 +1,117 @@
-import json
-from src.requests import (
-    cloudflare_gateway_request, retry, rate_limited_request, retry_config
+import argparse
+from src.domains import DomainConverter
+from src.cloudflare import (
+    create_list, update_list, create_rule, 
+    update_rule, delete_list, delete_rule
 )
+from src import utils, info, error, silent_error, PREFIX
 
+class CloudflareManager:
+    def __init__(self, prefix):
+        self.list_name = f"[{prefix}]"
+        self.rule_name = f"[{prefix}] Block Ads"
+        self.cache = utils.load_cache()
 
-@retry(**retry_config)
-@rate_limited_request
-def create_list(name, domains):
-    endpoint = "/lists"
-    data = {
-        "name": name,
-        "description": "Ads & Tracking Domains",
-        "type": "DOMAIN",
-        "items": [{"value": domain} for domain in domains]
-    }
-    status, response = cloudflare_gateway_request("POST", endpoint, body=json.dumps(data))
-    return response["result"]
+    def update_resources(self):
+        domains_to_block = DomainConverter().process_urls()
+        if len(domains_to_block) > 300000:
+            error("The domains list exceeds Cloudflare Gateway's free limit of 300,000 domains.")
+        
+        current_lists = utils.get_current_lists(self.cache, self.list_name)
+        current_rules = utils.get_current_rules(self.cache, self.rule_name)
 
-@retry(**retry_config)
-@rate_limited_request
-def update_list(list_id, remove_items, append_items):
-    endpoint = f"/lists/{list_id}"    
-    data = {
-        "remove": [domain for domain in remove_items],
-        "append": [{"value": domain} for domain in append_items]
-    }    
-    status, response = cloudflare_gateway_request("PATCH", endpoint, body=json.dumps(data))
-    return response["result"]
+        chunked_domains = list(utils.split_domain_list(domains_to_block, 1000))
+        list_ids = []
 
-@retry(**retry_config)
-def create_rule(rule_name, list_ids):
-    endpoint = "/rules"
-    data = {
-        "name": rule_name,
-        "description": "Block Ads & Tracking",
-        "action": "block",
-        "traffic": " or ".join(f'any(dns.domains[*] in ${lst})' for lst in list_ids),
-        "enabled": True,
-    }
-    status, response = cloudflare_gateway_request("POST", endpoint, body=json.dumps(data))
-    return response["result"]
+        for index, chunk in enumerate(chunked_domains, start=1):
+            list_name = f"{self.list_name} - {index:03d}"
+            
+            cgp_list = next((lst for lst in current_lists if lst["name"] == list_name), None)
 
-@retry(**retry_config)
-def update_rule(rule_name, rule_id, list_ids):
-    endpoint = f"/rules/{rule_id}"
-    data = {
-        "name": rule_name,
-        "description": "Block Ads & Tracking",
-        "action": "block",
-        "traffic": " or ".join(f'any(dns.domains[*] in ${lst})' for lst in list_ids),
-        "enabled": True,
-    }
-    status, response = cloudflare_gateway_request("PUT", endpoint, body=json.dumps(data))
-    return response["result"]
+            if cgp_list:
+                current_values = utils.get_list_items_cached(self.cache, cgp_list["id"])
+                remove_items = set(current_values) - set(chunk)
+                append_items = set(chunk) - set(current_values)
 
-@retry(**retry_config)
-def get_lists(prefix_name):
-    status, response = cloudflare_gateway_request("GET", "/lists")
-    lists = response["result"] or []
-    return [l for l in lists if l["name"].startswith(prefix_name)]
+                if not remove_items and not append_items:
+                    silent_error(f"Skipping list update: {cgp_list['name']}")
+                else:
+                    update_list(cgp_list["id"], remove_items, append_items)
+                    info(f"Updated list: {cgp_list['name']}")
+                list_ids.append(cgp_list["id"])
+            
+                self.cache["mapping"][cgp_list["id"]] = chunk
+            else:
+                lst = create_list(list_name, chunk)
+                info(f"Created list: {lst['name']}")
+                list_ids.append(lst["id"])
 
-@retry(**retry_config)
-def get_rules(rule_name_prefix):
-    status, response = cloudflare_gateway_request("GET", "/rules")
-    rules = response["result"] or []
-    return [r for r in rules if r["name"].startswith(rule_name_prefix)]
+                self.cache["lists"].append(lst)
+                self.cache["mapping"][lst["id"]] = chunk
 
-@retry(**retry_config)
-@rate_limited_request
-def delete_list(list_id):
-    endpoint = f"/lists/{list_id}"
-    status, response = cloudflare_gateway_request("DELETE", endpoint)
-    return response["result"]
+        utils.save_cache(self.cache)
 
-@retry(**retry_config)
-def delete_rule(rule_id):
-    endpoint = f"/rules/{rule_id}"
-    status, response = cloudflare_gateway_request("DELETE", endpoint)
-    return response["result"]
+        # Extract existing list IDs from current_rules for comparison
+        cgp_rule = next((rule for rule in current_rules if rule["name"] == self.rule_name), None)
+        cgp_list_ids = utils.extract_list_ids(cgp_rule)
 
-@retry(**retry_config)
-def get_list_items(list_id):
-    endpoint = f"/lists/{list_id}/items?limit=1000"
-    status, response = cloudflare_gateway_request("GET", endpoint)
-    items = response["result"] or []
-    return [i["value"] for i in items]
+        if cgp_rule:
+            if set(list_ids) == cgp_list_ids:
+                silent_error(f"Skipping rule update as list IDs are unchanged: {cgp_rule['name']}")
+            else:
+                rule = update_rule(self.rule_name, cgp_rule["id"], list_ids)
+                info(f"Updated rule {cgp_rule['name']}")
+                self.cache["rules"] = [rule]
+        else:
+            rule = create_rule(self.rule_name, list_ids)
+            info(f"Created rule {rule['name']}")
+            self.cache["rules"].append(rule)
+
+        # Delete excess lists
+        excess_lists = [lst for lst in current_lists if lst["id"] not in list_ids]
+        for lst in excess_lists:
+            delete_list(lst["id"])
+            info(f"Deleted excess list: {lst['name']}")
+            self.cache["lists"] = [item for item in self.cache["lists"] if item["id"] != lst["id"]]
+            if lst["id"] in self.cache["mapping"]:
+                del self.cache["mapping"][lst["id"]]
+
+        utils.save_cache(self.cache)
+
+    def delete_resources(self):
+        current_lists = utils.get_current_lists(self.cache, self.list_name)
+        current_rules = utils.get_current_rules(self.cache, self.rule_name)
+        current_lists.sort(key=utils.safe_sort_key)
+
+        # Delete rules with the name rule_name
+        for rule in current_rules:
+            delete_rule(rule["id"])
+            info(f"Deleted rule: {rule['name']}")
+
+        # Delete lists with names that include prefix
+        for lst in current_lists:
+            delete_list(lst["id"])
+            info(f"Deleted list: {lst['name']}")
+            self.cache["lists"] = [item for item in self.cache["lists"] if item["id"] != lst["id"]]
+            if lst["id"] in self.cache["mapping"]:
+                del self.cache["mapping"][lst["id"]]
+            self.cache["rules"] = []
+            utils.save_cache(self.cache)
+
+def main():
+    parser = argparse.ArgumentParser(description="Cloudflare Manager Script")
+    parser.add_argument("action", choices=["run", "leave"], help="Choose action: run or leave")
+    args = parser.parse_args()    
+    cloudflare_manager = CloudflareManager(PREFIX)
+    
+    if args.action == "run":
+        cloudflare_manager.update_resources()
+        if utils.is_running_in_github_actions():
+            utils.delete_cache()
+    elif args.action == "leave":
+        cloudflare_manager.delete_resources()
+    else:
+        error("Invalid action. Please choose either 'run' or 'leave'.")
+
+if __name__ == "__main__":
+    main()
