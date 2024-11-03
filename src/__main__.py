@@ -8,8 +8,8 @@ from src import utils, info, error, silent_error, PREFIX
 
 class CloudflareManager:
     def __init__(self, prefix):
-        self.list_name = f"[{prefix}]"
-        self.rule_name = f"[{prefix}] Block Ads"
+        self.list_name = f"{prefix}"
+        self.rule_name = f"{prefix}"
         self.cache = utils.load_cache()
 
     def update_resources(self):
