@@ -1,10 +1,18 @@
+<<<<<<< HEAD
 name: Update Allowlist Rules
+=======
+name: Update Blocklist Rules
+>>>>>>> facd83e4592591d91ba40df15c103c8b3f11e79b
 on:
   schedule:
   - cron: "0 3 */3 * *"
   push:
     branches:
+<<<<<<< HEAD
     - allowlist
+=======
+    - main
+>>>>>>> facd83e4592591d91ba40df15c103c8b3f11e79b
   workflow_dispatch:
 jobs:
   run:
@@ -13,6 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
       CF_IDENTIFIER: ${{ secrets.CF_IDENTIFIER }}
       ADLIST_URLS: ${{ vars.ADLIST_URLS }}
@@ -31,6 +40,15 @@ jobs:
         with:
           python-version: 3.11
         
+      - name: Cache Data
+        id: cache-cloudflare
+        uses: actions/cache@main
+        with:
+          path: cloudflare_cache.json
+          key: ${{ runner.os }}-cloudflare-cache-${{ github.run_id }}
+          restore-keys: |
+            ${{ runner.os }}-cloudflare-cache-
+      
       - name: Cloudflare Gateway Zero Trust 
         run: python -m src run
           
