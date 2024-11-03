@@ -5,6 +5,7 @@ from src.colorlog import logger
 
 # Constants
 PREFIX = "Blocklist"
+CACHE_FILE = "cloudflare_cache.json"
 
 # Read .env variables 
 def dot_env(file_path=".env"):
