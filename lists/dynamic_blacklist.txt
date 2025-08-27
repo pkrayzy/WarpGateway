@@ -1,4 +1,5 @@
-google-analytics.com
-googleadservices.com
-doubleclick.net
-googletagservices.com
+||google-analytics.com^
+||googleadservices.com^
+||doubleclick.net^
+||googletagservices.com^
+
