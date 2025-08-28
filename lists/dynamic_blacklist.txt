@@ -1,0 +1,5 @@
+||google-analytics.com^
+||googleadservices.com^
+||doubleclick.net^
+||googletagservices.com^
+
