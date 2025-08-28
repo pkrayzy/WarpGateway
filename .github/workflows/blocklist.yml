@@ -40,8 +40,11 @@ jobs:
           key: ${{ runner.os }}-cloudflare-cache-${{ github.run_id }}
           restore-keys: |
             ${{ runner.os }}-cloudflare-cache-
+
+      - name: Delete lists
+        run: python -m src leave
       
-      - name: Cloudflare Gateway Zero Trust 
+      - name: Create lists
         run: python -m src run
           
       - name: Delete workflow runs
