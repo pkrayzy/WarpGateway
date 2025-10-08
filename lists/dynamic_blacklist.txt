@@ -2,3 +2,6 @@
 ||googleadservices.com^
 ||doubleclick.net^
 ||googletagservices.com^
+
+||commcloud.prod-bgbh-belkin-com.cc-ecdn.net^
+||commcloud.prod-bgbh-belkin-com.cc-ecdn.net.cdn.cloudflare.net^
